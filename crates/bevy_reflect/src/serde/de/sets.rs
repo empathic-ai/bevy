@@ -1,8 +1,7 @@
-use crate::{
-    serde::{de::registration_utils::try_get_registration, TypedReflectDeserializer},
-    DynamicSet, Set, SetInfo, TypeRegistry,
-};
-use core::{fmt, fmt::Formatter};
+use crate::serde::de::registration_utils::try_get_registration;
+use crate::serde::TypedReflectDeserializer;
+use crate::{DynamicSet, Set, SetInfo, TypeRegistry};
+use core::fmt::{self, Formatter};
 use serde::de::{SeqAccess, Visitor};
 
 use super::ReflectDeserializerProcessor;
@@ -28,9 +27,12 @@ impl<'de, P: ReflectDeserializerProcessor> Visitor<'de> for SetVisitor<'_, P> {
         V: SeqAccess<'de>,
     {
         let mut dynamic_set = DynamicSet::default();
-        let value_registration = try_get_registration(self.set_info.value_ty(), self.registry)?;
+        let value_data = try_get_registration(
+            self.set_info.value_ty(),
+            self.registry,
+        )?;
         while let Some(value) = set.next_element_seed(TypedReflectDeserializer::new_internal(
-            value_registration,
+            value_data,
             self.registry,
             self.processor.as_deref_mut(),
         ))? {

@@ -1,11 +1,8 @@
-use crate::{
-    serde::{ser::error_utils::make_custom_error, TypedReflectSerializer},
-    Enum, TypeInfo, TypeRegistry, VariantInfo, VariantType,
-};
-use serde::{
-    ser::{SerializeStructVariant, SerializeTupleVariant},
-    Serialize,
-};
+use crate::serde::ser::error_utils::make_custom_error;
+use crate::serde::TypedReflectSerializer;
+use crate::{Enum, TypeRegistry, VariantType};
+use serde::ser::{SerializeStructVariant, SerializeTupleVariant};
+use serde::Serialize;
 
 use super::ReflectSerializerProcessor;
 
@@ -28,14 +25,7 @@ impl<P: ReflectSerializerProcessor> Serialize for EnumSerializer<'_, P> {
             ))
         })?;
 
-        let enum_info = match type_info {
-            TypeInfo::Enum(enum_info) => enum_info,
-            info => {
-                return Err(make_custom_error(format_args!(
-                    "expected enum type but received {info:?}"
-                )));
-            }
-        };
+        let enum_info = type_info.as_enum().map_err(make_custom_error)?;
 
         let enum_name = enum_info.type_path_table().ident().unwrap();
         let variant_index = self.enum_value.variant_index() as u32;
@@ -61,14 +51,9 @@ impl<P: ReflectSerializerProcessor> Serialize for EnumSerializer<'_, P> {
                 }
             }
             VariantType::Struct => {
-                let struct_info = match variant_info {
-                    VariantInfo::Struct(struct_info) => struct_info,
-                    info => {
-                        return Err(make_custom_error(format_args!(
-                            "expected struct variant type but received {info:?}",
-                        )));
-                    }
-                };
+                let struct_info = variant_info
+                    .as_struct_variant()
+                    .map_err(make_custom_error)?;
 
                 let mut state = serializer.serialize_struct_variant(
                     enum_name,
@@ -82,14 +67,18 @@ impl<P: ReflectSerializerProcessor> Serialize for EnumSerializer<'_, P> {
                         field_info.name(),
                         &TypedReflectSerializer::new_internal(
                             field.value(),
+                            field_info.type_info(),
                             self.registry,
-                            self.processor,
+                            self.processor
                         ),
                     )?;
                 }
                 state.end()
             }
             VariantType::Tuple if field_len == 1 => {
+                let variant_info = variant_info.as_tuple_variant().map_err(make_custom_error)?;
+                let info = variant_info.field_at(0).unwrap().type_info();
+
                 let field = self.enum_value.field_at(0).unwrap();
 
                 if type_info.type_path_table().module_path() == Some("core::option")
@@ -97,28 +86,34 @@ impl<P: ReflectSerializerProcessor> Serialize for EnumSerializer<'_, P> {
                 {
                     serializer.serialize_some(&TypedReflectSerializer::new_internal(
                         field,
+                        info,
                         self.registry,
-                        self.processor,
+                        self.processor
                     ))
                 } else {
                     serializer.serialize_newtype_variant(
                         enum_name,
                         variant_index,
                         variant_name,
-                        &TypedReflectSerializer::new_internal(field, self.registry, self.processor),
+                        &TypedReflectSerializer::new_internal(field, info, self.registry, self.processor),
                     )
                 }
             }
             VariantType::Tuple => {
+                let variant_info = variant_info.as_tuple_variant().map_err(make_custom_error)?;
+
                 let mut state = serializer.serialize_tuple_variant(
                     enum_name,
                     variant_index,
                     variant_name,
                     field_len,
                 )?;
-                for field in self.enum_value.iter_fields() {
+                for (index, field) in self.enum_value.iter_fields().enumerate() {
+                    let info = variant_info.field_at(index).unwrap().type_info();
+
                     state.serialize_field(&TypedReflectSerializer::new_internal(
                         field.value(),
+                        info,
                         self.registry,
                         self.processor,
                     ))?;

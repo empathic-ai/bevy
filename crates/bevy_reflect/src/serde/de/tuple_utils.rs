@@ -1,8 +1,7 @@
+use crate::serde::de::error_utils::make_custom_error;
+use crate::serde::de::registration_utils::try_get_registration;
+use crate::serde::{SerializationData, TypedReflectDeserializer};
 use crate::{
-    serde::{
-        de::{error_utils::make_custom_error, registration_utils::try_get_registration},
-        SerializationData, TypedReflectDeserializer,
-    },
     DynamicTuple, TupleInfo, TupleStructInfo, TupleVariantInfo, TypeRegistration, TypeRegistry,
     UnnamedField,
 };
@@ -95,9 +94,11 @@ where
             continue;
         }
 
+        let field_info = info.field_at::<V::Error>(index)?;
+
         let value = seq
             .next_element_seed(TypedReflectDeserializer::new_internal(
-                try_get_registration(*info.field_at(index)?.ty(), registry)?,
+                try_get_registration(*field_info.ty(), registry)?,
                 registry,
                 processor.as_deref_mut(),
             ))?

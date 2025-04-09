@@ -169,7 +169,7 @@ impl<'de, P: ReflectDeserializerProcessor> DeserializeSeed<'de> for ReflectDeser
                 let value = map.next_value_seed(TypedReflectDeserializer::new_internal(
                     registration,
                     self.registry,
-                    self.processor,
+                    self.processor
                 ))?;
 
                 if map.next_key::<IgnoredAny>()?.is_some() {
@@ -267,7 +267,6 @@ impl<'de, P: ReflectDeserializerProcessor> DeserializeSeed<'de> for ReflectDeser
 /// [`Box<DynamicList>`]: crate::DynamicList
 /// [`FromReflect`]: crate::FromReflect
 /// [`ReflectFromReflect`]: crate::ReflectFromReflect
-/// [`with_processor`]: Self::with_processor
 pub struct TypedReflectDeserializer<'a, P: ReflectDeserializerProcessor = ()> {
     registration: &'a TypeRegistration,
     registry: &'a TypeRegistry,
@@ -283,7 +282,7 @@ impl<'a> TypedReflectDeserializer<'a, ()> {
     /// [`with_processor`]: Self::with_processor
     pub fn new(registration: &'a TypeRegistration, registry: &'a TypeRegistry) -> Self {
         #[cfg(feature = "debug_stack")]
-        TYPE_INFO_STACK.set(crate::type_info_stack::TypeInfoStack::new());
+        TYPE_INFO_STACK.set(crate::type_stack::TypeStack::new());
 
         Self {
             registration,
@@ -299,12 +298,12 @@ impl<'a> TypedReflectDeserializer<'a, ()> {
     ///
     /// Panics if `T` is not registered in the given [`TypeRegistry`].
     pub fn of<T: TypePath>(registry: &'a TypeRegistry) -> Self {
-        let registration = registry
+        let data = registry
             .get(core::any::TypeId::of::<T>())
             .unwrap_or_else(|| panic!("no registration found for type `{}`", T::type_path()));
 
         Self {
-            registration,
+            registration: data,
             registry,
             processor: None,
         }
@@ -324,7 +323,7 @@ impl<'a, P: ReflectDeserializerProcessor> TypedReflectDeserializer<'a, P> {
         processor: &'a mut P,
     ) -> Self {
         #[cfg(feature = "debug_stack")]
-        TYPE_INFO_STACK.set(crate::type_info_stack::TypeInfoStack::new());
+        TYPE_INFO_STACK.set(crate::type_stack::TypeStack::new());
 
         Self {
             registration,
@@ -357,117 +356,85 @@ impl<'de, P: ReflectDeserializerProcessor> DeserializeSeed<'de>
         D: serde::Deserializer<'de>,
     {
         let deserialize_internal = || -> Result<Self::Value, D::Error> {
-            // First, check if our processor wants to deserialize this type
-            // This takes priority over any other deserialization operations
-            let deserializer = if let Some(processor) = self.processor.as_deref_mut() {
-                match processor.try_deserialize(self.registration, self.registry, deserializer) {
-                    Ok(Ok(value)) => {
-                        return Ok(value);
-                    }
-                    Err(err) => {
-                        return Err(make_custom_error(err));
-                    }
-                    Ok(Err(deserializer)) => deserializer,
-                }
-            } else {
-                deserializer
-            };
+            let registration = self.registration;
 
-            let type_path = self.registration.type_info().type_path();
+            let type_path = registration.type_info().type_path();
 
             // Handle both Value case and types that have a custom `ReflectDeserialize`
-            if let Some(deserialize_reflect) = self.registration.data::<ReflectDeserialize>() {
+            if let Some(deserialize_reflect) = registration.data::<ReflectDeserialize>() {
                 let value = deserialize_reflect.deserialize(deserializer)?;
                 return Ok(value.into_partial_reflect());
             }
 
-            if let Some(deserialize_reflect) =
-                self.registration.data::<ReflectDeserializeWithRegistry>()
-            {
-                let value = deserialize_reflect.deserialize(deserializer, self.registry)?;
-                return Ok(value);
-            }
-
-            match self.registration.type_info() {
+            match registration.type_info() {
                 TypeInfo::Struct(struct_info) => {
                     let mut dynamic_struct = deserializer.deserialize_struct(
                         struct_info.type_path_table().ident().unwrap(),
                         struct_info.field_names(),
                         StructVisitor {
                             struct_info,
+                            registration,
+                            registry: self.registry,
+                            processor: self.processor
+                        },
+                    )?;
+                    dynamic_struct.set_represented_type(Some(registration.type_info()));
+                    Ok(Box::new(dynamic_struct))
+                }
+                TypeInfo::TupleStruct(tuple_struct_info) => {
+                    let mut dynamic_tuple_struct = deserializer.deserialize_tuple_struct(
+                        tuple_struct_info.type_path_table().ident().unwrap(),
+                        tuple_struct_info.field_len(),
+                        TupleStructVisitor {
+                            tuple_struct_info,
                             registration: self.registration,
                             registry: self.registry,
                             processor: self.processor,
                         },
                     )?;
-                    dynamic_struct.set_represented_type(Some(self.registration.type_info()));
-                    Ok(Box::new(dynamic_struct))
-                }
-                TypeInfo::TupleStruct(tuple_struct_info) => {
-                    let mut dynamic_tuple_struct = if tuple_struct_info.field_len() == 1
-                        && self.registration.data::<SerializationData>().is_none()
-                    {
-                        deserializer.deserialize_newtype_struct(
-                            tuple_struct_info.type_path_table().ident().unwrap(),
-                            TupleStructVisitor {
-                                tuple_struct_info,
-                                registration: self.registration,
-                                registry: self.registry,
-                                processor: self.processor,
-                            },
-                        )?
-                    } else {
-                        deserializer.deserialize_tuple_struct(
-                            tuple_struct_info.type_path_table().ident().unwrap(),
-                            tuple_struct_info.field_len(),
-                            TupleStructVisitor {
-                                tuple_struct_info,
-                                registration: self.registration,
-                                registry: self.registry,
-                                processor: self.processor,
-                            },
-                        )?
-                    };
-                    dynamic_tuple_struct.set_represented_type(Some(self.registration.type_info()));
+                    dynamic_tuple_struct.set_represented_type(Some(registration.type_info()));
                     Ok(Box::new(dynamic_tuple_struct))
                 }
                 TypeInfo::List(list_info) => {
-                    let mut dynamic_list = deserializer.deserialize_seq(ListVisitor {
-                        list_info,
-                        registry: self.registry,
-                        processor: self.processor,
-                    })?;
-                    dynamic_list.set_represented_type(Some(self.registration.type_info()));
+                    let mut dynamic_list =
+                        deserializer.deserialize_seq(ListVisitor {
+                            list_info,
+                            registry: self.registry,
+                            processor: self.processor,
+                        })?;
+                    dynamic_list.set_represented_type(Some(registration.type_info()));
                     Ok(Box::new(dynamic_list))
                 }
                 TypeInfo::Array(array_info) => {
                     let mut dynamic_array = deserializer.deserialize_tuple(
                         array_info.capacity(),
                         ArrayVisitor {
-                            array_info,
+                            array_info: &array_info,
                             registry: self.registry,
                             processor: self.processor,
                         },
                     )?;
-                    dynamic_array.set_represented_type(Some(self.registration.type_info()));
+                    dynamic_array.set_represented_type(Some(registration.type_info()));
                     Ok(Box::new(dynamic_array))
                 }
                 TypeInfo::Map(map_info) => {
-                    let mut dynamic_map = deserializer.deserialize_map(MapVisitor {
-                        map_info,
-                        registry: self.registry,
-                        processor: self.processor,
-                    })?;
-                    dynamic_map.set_represented_type(Some(self.registration.type_info()));
+                    let mut dynamic_map =
+                        deserializer.deserialize_map(MapVisitor {
+                            map_info,
+                            registry: self.registry,
+                            processor: self.processor,
+                        })?;
+                    dynamic_map.set_represented_type(Some(registration.type_info()));
                     Ok(Box::new(dynamic_map))
                 }
                 TypeInfo::Set(set_info) => {
-                    let mut dynamic_set = deserializer.deserialize_seq(SetVisitor {
-                        set_info,
-                        registry: self.registry,
-                        processor: self.processor,
-                    })?;
-                    dynamic_set.set_represented_type(Some(self.registration.type_info()));
+                    let mut dynamic_set =
+                        deserializer.deserialize_seq(SetVisitor {
+                            set_info,
+                            registry: self.registry,
+                            processor: self.processor,
+                        })?;
+                    dynamic_set.set_represented_type(Some(registration.type_info()));
                     Ok(Box::new(dynamic_set))
                 }
                 TypeInfo::Tuple(tuple_info) => {
@@ -480,7 +447,7 @@ impl<'de, P: ReflectDeserializerProcessor> DeserializeSeed<'de>
                             processor: self.processor,
                         },
                     )?;
-                    dynamic_tuple.set_represented_type(Some(self.registration.type_info()));
+                    dynamic_tuple.set_represented_type(Some(registration.type_info()));
                     Ok(Box::new(dynamic_tuple))
                 }
                 TypeInfo::Enum(enum_info) => {
@@ -489,7 +456,7 @@ impl<'de, P: ReflectDeserializerProcessor> DeserializeSeed<'de>
                         && enum_info.type_path_table().ident() == Some("Option")
                     {
                         deserializer.deserialize_option(OptionVisitor {
-                            enum_info,
+                            enum_info: &enum_info,
                             registry: self.registry,
                             processor: self.processor,
                         })?
@@ -505,7 +472,7 @@ impl<'de, P: ReflectDeserializerProcessor> DeserializeSeed<'de>
                             },
                         )?
                     };
-                    dynamic_enum.set_represented_type(Some(self.registration.type_info()));
+                    dynamic_enum.set_represented_type(Some(registration.type_info()));
                     Ok(Box::new(dynamic_enum))
                 }
                 TypeInfo::Opaque(_) => {
@@ -518,12 +485,12 @@ impl<'de, P: ReflectDeserializerProcessor> DeserializeSeed<'de>
         };
 
         #[cfg(feature = "debug_stack")]
-        TYPE_INFO_STACK.with_borrow_mut(|stack| stack.push(self.registration.type_info()));
+        TYPE_INFO_STACK.with_borrow_mut(|stack| stack.push(*self.registration.type_info().ty()));
 
         let output = deserialize_internal();
 
         #[cfg(feature = "debug_stack")]
-        TYPE_INFO_STACK.with_borrow_mut(crate::type_info_stack::TypeInfoStack::pop);
+        TYPE_INFO_STACK.with_borrow_mut(crate::type_stack::TypeStack::pop);
 
         output
     }

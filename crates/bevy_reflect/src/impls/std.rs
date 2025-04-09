@@ -848,7 +848,7 @@ macro_rules! impl_reflect_for_hashset {
     ($ty:path) => {
         impl<V, S> Set for $ty
         where
-            V: FromReflect + TypePath + GetTypeRegistration + Eq + Hash,
+            V: FromReflect + MaybeTyped + TypePath + GetTypeRegistration + Eq + Hash,
             S: TypePath + BuildHasher + Send + Sync,
         {
             fn get(&self, value: &dyn PartialReflect) -> Option<&dyn PartialReflect> {
@@ -917,7 +917,7 @@ macro_rules! impl_reflect_for_hashset {
 
         impl<V, S> PartialReflect for $ty
         where
-            V: FromReflect + TypePath + GetTypeRegistration + Eq + Hash,
+            V: FromReflect + MaybeTyped + TypePath + GetTypeRegistration + Eq + Hash,
             S: TypePath + BuildHasher + Send + Sync,
         {
             fn get_represented_type_info(&self) -> Option<&'static TypeInfo> {
@@ -987,7 +987,7 @@ macro_rules! impl_reflect_for_hashset {
 
         impl<V, S> Typed for $ty
         where
-            V: FromReflect + TypePath + GetTypeRegistration + Eq + Hash,
+            V: FromReflect + MaybeTyped + TypePath + GetTypeRegistration + Eq + Hash,
             S: TypePath + BuildHasher + Send + Sync,
         {
             fn type_info() -> &'static TypeInfo {
@@ -1004,7 +1004,7 @@ macro_rules! impl_reflect_for_hashset {
 
         impl<V, S> GetTypeRegistration for $ty
         where
-            V: FromReflect + TypePath + GetTypeRegistration + Eq + Hash,
+            V: FromReflect + MaybeTyped + TypePath + GetTypeRegistration + Eq + Hash,
             S: TypePath + BuildHasher + Send + Sync,
         {
             fn get_type_registration() -> TypeRegistration {
@@ -1021,13 +1021,13 @@ macro_rules! impl_reflect_for_hashset {
         impl_full_reflect!(
             <V, S> for $ty
             where
-                V: FromReflect + TypePath + GetTypeRegistration + Eq + Hash,
+                V: FromReflect + MaybeTyped + TypePath + GetTypeRegistration + Eq + Hash,
                 S: TypePath + BuildHasher + Send + Sync,
         );
 
         impl<V, S> FromReflect for $ty
         where
-            V: FromReflect + TypePath + GetTypeRegistration + Eq + Hash,
+            V: FromReflect + MaybeTyped + TypePath + GetTypeRegistration + Eq + Hash,
             S: TypePath + BuildHasher + Default + Send + Sync,
         {
             fn from_reflect(reflect: &dyn PartialReflect) -> Option<Self> {
@@ -1054,7 +1054,7 @@ impl_type_path!(::std::collections::HashSet<V, S>);
 #[cfg(feature = "functions")]
 crate::func::macros::impl_function_traits!(::std::collections::HashSet<V, S>;
     <
-        V: Hash + Eq + FromReflect + TypePath + GetTypeRegistration,
+        V: Hash + Eq + FromReflect + MaybeTyped + TypePath + GetTypeRegistration,
         S: TypePath + BuildHasher + Default + Send + Sync
     >
 );
@@ -1064,7 +1064,7 @@ impl_type_path!(::bevy_utils::hashbrown::HashSet<V, S>);
 #[cfg(feature = "functions")]
 crate::func::macros::impl_function_traits!(::bevy_utils::hashbrown::HashSet<V, S>;
     <
-        V: Hash + Eq + FromReflect + TypePath + GetTypeRegistration,
+        V: Hash + Eq + FromReflect + MaybeTyped + TypePath + GetTypeRegistration,
         S: TypePath + BuildHasher + Default + Send + Sync
     >
 );

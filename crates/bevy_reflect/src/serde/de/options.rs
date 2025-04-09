@@ -1,11 +1,8 @@
-use crate::{
-    serde::{
-        de::{error_utils::make_custom_error, registration_utils::try_get_registration},
-        TypedReflectDeserializer,
-    },
-    DynamicEnum, DynamicTuple, EnumInfo, TypeRegistry, VariantInfo,
-};
-use core::{fmt, fmt::Formatter};
+use crate::serde::de::error_utils::make_custom_error;
+use crate::serde::de::registration_utils::try_get_registration;
+use crate::serde::TypedReflectDeserializer;
+use crate::{DynamicEnum, DynamicTuple, EnumInfo, TypeRegistry, VariantInfo};
+use core::fmt::{self, Formatter};
 use serde::de::{DeserializeSeed, Error, Visitor};
 
 use super::ReflectDeserializerProcessor;
@@ -42,16 +39,13 @@ impl<'de, P: ReflectDeserializerProcessor> Visitor<'de> for OptionVisitor<'_, P>
         match variant_info {
             VariantInfo::Tuple(tuple_info) if tuple_info.field_len() == 1 => {
                 let field = tuple_info.field_at(0).unwrap();
-                let registration = try_get_registration(*field.ty(), self.registry)?;
-                let de = TypedReflectDeserializer::new_internal(
-                    registration,
-                    self.registry,
-                    self.processor,
-                );
+                let ty = *field.ty();
+                let data = try_get_registration(ty, self.registry)?;
+                let de = TypedReflectDeserializer::new_internal(data, self.registry, self.processor);
                 let mut value = DynamicTuple::default();
                 value.insert_boxed(de.deserialize(deserializer)?);
                 let mut option = DynamicEnum::default();
-                option.set_variant("Some", value);
+                option.set_variant_with_index(1, "Some", value);
                 Ok(option)
             }
             info => Err(make_custom_error(format_args!(

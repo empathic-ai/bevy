@@ -6,12 +6,11 @@ use crate::{
         error_utils::make_custom_error, lists::ListSerializer, maps::MapSerializer,
         sets::SetSerializer, structs::StructSerializer, tuple_structs::TupleStructSerializer,
         tuples::TupleSerializer,
-    },
-    PartialReflect, ReflectRef, TypeRegistry,
+    }, PartialReflect, ReflectRef, TypeInfo, TypeRegistry
 };
 use serde::{ser::SerializeMap, Serialize, Serializer};
 
-use super::ReflectSerializerProcessor;
+use super::{ReflectSerializerProcessor, Serializable};
 
 /// A general purpose serializer for reflected types.
 ///
@@ -58,6 +57,7 @@ pub struct ReflectSerializer<'a, P = ()> {
     value: &'a dyn PartialReflect,
     registry: &'a TypeRegistry,
     processor: Option<&'a P>,
+    is_internal: bool,
 }
 
 impl<'a> ReflectSerializer<'a, ()> {
@@ -72,6 +72,17 @@ impl<'a> ReflectSerializer<'a, ()> {
             value,
             registry,
             processor: None,
+            is_internal: false,
+        }
+    }
+
+    /// An internal constructor for creating a serializer without resetting the type info stack.
+    fn new_internal(value: &'a dyn PartialReflect, registry: &'a TypeRegistry) -> Self {
+        Self {
+            value,
+            registry,
+            processor: None,
+            is_internal: true,
         }
     }
 }
@@ -92,6 +103,7 @@ impl<'a, P: ReflectSerializerProcessor> ReflectSerializer<'a, P> {
             value,
             registry,
             processor: Some(processor),
+            is_internal: false
         }
     }
 }
@@ -101,26 +113,29 @@ impl<P: ReflectSerializerProcessor> Serialize for ReflectSerializer<'_, P> {
     where
         S: Serializer,
     {
+        let info = self.value.get_represented_type_info().ok_or_else(|| {
+            if self.value.is_dynamic() {
+                make_custom_error(format_args!(
+                    "cannot serialize dynamic value without represented type: `{}`",
+                    self.value.reflect_type_path()
+                ))
+            } else {
+                make_custom_error(format_args!(
+                    "cannot get type info for `{}`",
+                    self.value.reflect_type_path()
+                ))
+            }
+        })?;
+
         let mut state = serializer.serialize_map(Some(1))?;
-        state.serialize_entry(
-            self.value
-                .get_represented_type_info()
-                .ok_or_else(|| {
-                    if self.value.is_dynamic() {
-                        make_custom_error(format_args!(
-                            "cannot serialize dynamic value without represented type: `{}`",
-                            self.value.reflect_type_path()
-                        ))
-                    } else {
-                        make_custom_error(format_args!(
-                            "cannot get type info for `{}`",
-                            self.value.reflect_type_path()
-                        ))
-                    }
-                })?
-                .type_path(),
-            &TypedReflectSerializer::new_internal(self.value, self.registry, self.processor),
-        )?;
+
+        let typed_serializer = if self.is_internal {
+            TypedReflectSerializer::new_internal(self.value, Some(info), self.registry, self.processor)
+        } else {
+            TypedReflectSerializer::new(self.value, info, self.registry, self.processor)
+        };
+
+        state.serialize_entry(info.type_path(), &typed_serializer)?;
         state.end()
     }
 }
@@ -170,30 +185,29 @@ impl<P: ReflectSerializerProcessor> Serialize for ReflectSerializer<'_, P> {
 /// [`with_processor`]: Self::with_processor
 pub struct TypedReflectSerializer<'a, P = ()> {
     value: &'a dyn PartialReflect,
+    info: Option<&'a TypeInfo>,
     registry: &'a TypeRegistry,
     processor: Option<&'a P>,
 }
 
-impl<'a> TypedReflectSerializer<'a, ()> {
-    /// Creates a serializer with no processor.
-    ///
-    /// If you want to add custom logic for serializing certain values, use
-    /// [`with_processor`].
-    ///
-    /// [`with_processor`]: Self::with_processor
-    pub fn new(value: &'a dyn PartialReflect, registry: &'a TypeRegistry) -> Self {
+impl<'a, P> TypedReflectSerializer<'a, P> {
+    pub fn new(
+        value: &'a dyn PartialReflect,
+        info: &'a TypeInfo,
+        registry: &'a TypeRegistry,
+        processor: Option<&'a P>,
+    ) -> Self {
         #[cfg(feature = "debug_stack")]
-        TYPE_INFO_STACK.set(crate::type_info_stack::TypeInfoStack::new());
+        TYPE_INFO_STACK.set(crate::type_stack::TypeStack::new());
 
-        Self {
+        TypedReflectSerializer {
             value,
+            info: Some(info),
             registry,
-            processor: None,
+            processor
         }
     }
-}
 
-impl<'a, P> TypedReflectSerializer<'a, P> {
     /// Creates a serializer with a processor.
     ///
     /// If you do not need any custom logic for handling certain values, use
@@ -202,14 +216,16 @@ impl<'a, P> TypedReflectSerializer<'a, P> {
     /// [`new`]: Self::new
     pub fn with_processor(
         value: &'a dyn PartialReflect,
+        info: &'a TypeInfo,
         registry: &'a TypeRegistry,
         processor: &'a P,
     ) -> Self {
         #[cfg(feature = "debug_stack")]
-        TYPE_INFO_STACK.set(crate::type_info_stack::TypeInfoStack::new());
+        TYPE_INFO_STACK.set(crate::type_stack::TypeStack::new());
 
         Self {
             value,
+            info: Some(info),
             registry,
             processor: Some(processor),
         }
@@ -218,11 +234,13 @@ impl<'a, P> TypedReflectSerializer<'a, P> {
     /// An internal constructor for creating a serializer without resetting the type info stack.
     pub(super) fn new_internal(
         value: &'a dyn PartialReflect,
+        info: Option<&'a TypeInfo>,
         registry: &'a TypeRegistry,
         processor: Option<&'a P>,
     ) -> Self {
         Self {
             value,
+            info,
             registry,
             processor,
         }
@@ -236,9 +254,21 @@ impl<P: ReflectSerializerProcessor> Serialize for TypedReflectSerializer<'_, P> 
     {
         #[cfg(feature = "debug_stack")]
         {
-            if let Some(info) = self.value.get_represented_type_info() {
-                TYPE_INFO_STACK.with_borrow_mut(|stack| stack.push(info));
+            match self.info {
+                Some(info) => {
+                    TYPE_INFO_STACK.with_borrow_mut(|stack| {
+                        stack.push(*info.ty());
+                    });
+                }
+                None => {
+                    TYPE_INFO_STACK.with_borrow_mut(|stack| stack.push(self.value.ty()));
+                }
             }
+        }
+
+        if self.info.is_none() {
+            return ReflectSerializer::new_internal(self.value, self.registry)
+                .serialize(serializer);
         }
 
         // First, check if our processor wants to serialize this type
@@ -319,7 +349,7 @@ impl<P: ReflectSerializerProcessor> Serialize for TypedReflectSerializer<'_, P> 
         };
 
         #[cfg(feature = "debug_stack")]
-        TYPE_INFO_STACK.with_borrow_mut(crate::type_info_stack::TypeInfoStack::pop);
+        TYPE_INFO_STACK.with_borrow_mut(crate::type_stack::TypeStack::pop);
 
         output
     }

@@ -61,12 +61,9 @@ impl<'de, P: ReflectDeserializerProcessor> Visitor<'de> for EnumVisitor<'_, P> {
                     *TupleLikeInfo::field_at(tuple_info, 0)?.ty(),
                     self.registry,
                 )?;
-                let value =
-                    variant.newtype_variant_seed(TypedReflectDeserializer::new_internal(
-                        registration,
-                        self.registry,
-                        self.processor,
-                    ))?;
+                let value = variant.newtype_variant_seed(
+                    TypedReflectDeserializer::new_internal(registration, self.registry, self.processor),
+                )?;
                 let mut dynamic_tuple = DynamicTuple::default();
                 dynamic_tuple.insert_boxed(value);
                 dynamic_tuple.into()

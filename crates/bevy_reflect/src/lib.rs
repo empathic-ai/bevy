@@ -598,7 +598,7 @@ mod generics;
 pub mod serde;
 pub mod std_traits;
 #[cfg(feature = "debug_stack")]
-mod type_info_stack;
+mod type_stack;
 pub mod utility;
 
 /// The reflect prelude.

@@ -1,7 +1,5 @@
 use crate::{
-    array_debug, enum_debug, list_debug, map_debug, serde::Serializable, set_debug, struct_debug,
-    tuple_debug, tuple_struct_debug, DynamicTypePath, DynamicTyped, OpaqueInfo, ReflectKind,
-    ReflectKindMismatchError, ReflectMut, ReflectOwned, ReflectRef, TypeInfo, TypePath, Typed,
+    array_debug, enum_debug, list_debug, map_debug, serde::Serializable, set_debug, struct_debug, tuple_debug, tuple_struct_debug, DynamicTypePath, DynamicTyped, GetType, OpaqueInfo, ReflectKind, ReflectKindMismatchError, ReflectMut, ReflectOwned, ReflectRef, TypeInfo, TypePath, Typed
 };
 use core::{
     any::{Any, TypeId},
@@ -78,7 +76,7 @@ impl From<ReflectKindMismatchError> for ApplyError {
     message = "`{Self}` does not implement `PartialReflect` so cannot be introspected",
     note = "consider annotating `{Self}` with `#[derive(Reflect)]`"
 )]
-pub trait PartialReflect: DynamicTypePath + Send + Sync
+pub trait PartialReflect: DynamicTypePath + GetType + Send + Sync
 where
     // NB: we don't use `Self: Any` since for downcasting, `Reflect` should be used.
     Self: 'static,

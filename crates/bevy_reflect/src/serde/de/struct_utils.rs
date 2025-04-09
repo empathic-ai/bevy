@@ -108,11 +108,7 @@ where
             ))
         })?;
         let registration = try_get_registration(*field.ty(), registry)?;
-        let value = map.next_value_seed(TypedReflectDeserializer::new_internal(
-            registration,
-            registry,
-            processor.as_deref_mut(),
-        ))?;
+        let value = map.next_value_seed(TypedReflectDeserializer::new_internal(registration, registry, processor.as_deref_mut()))?;
         dynamic_struct.insert_boxed(&key, value);
     }
 
@@ -170,9 +166,11 @@ where
             continue;
         }
 
+        let field_info = info.field_at::<V::Error>(index)?;
+
         let value = seq
             .next_element_seed(TypedReflectDeserializer::new_internal(
-                try_get_registration(*info.field_at(index)?.ty(), registry)?,
+                try_get_registration(*field_info.ty(), registry)?,
                 registry,
                 processor.as_deref_mut(),
             ))?
