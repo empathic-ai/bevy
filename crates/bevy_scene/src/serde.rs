@@ -187,7 +187,7 @@ impl<'a> Serialize for SceneMapSerializer<'a> {
         for (type_info, partial_reflect) in sorted_entries {
             state.serialize_entry(
                 type_info.type_path(),
-                &TypedReflectSerializer::new(partial_reflect, type_info, self.registry),
+                &TypedReflectSerializer::<()>::new(partial_reflect, type_info, self.registry, None),
             )?;
         }
         state.end()

@@ -40,7 +40,7 @@ pub(super) fn try_custom_serialize<S: Serializer>(
 
     if let Some(reflect_serialize) = registration.data::<ReflectSerialize>() {
         #[cfg(feature = "debug_stack")]
-        TYPE_INFO_STACK.with_borrow_mut(crate::type_info_stack::TypeInfoStack::pop);
+        TYPE_INFO_STACK.with_borrow_mut(crate::type_stack::TypeStack::pop);
 
         Ok(reflect_serialize
             .get_serializable(value)
@@ -50,7 +50,7 @@ pub(super) fn try_custom_serialize<S: Serializer>(
         registration.data::<ReflectSerializeWithRegistry>()
     {
         #[cfg(feature = "debug_stack")]
-        TYPE_INFO_STACK.with_borrow_mut(crate::type_info_stack::TypeInfoStack::pop);
+        TYPE_INFO_STACK.with_borrow_mut(crate::type_stack::TypeStack::pop);
 
         Ok(reflect_serialize_with_registry.serialize(value, serializer, type_registry))
     } else {
