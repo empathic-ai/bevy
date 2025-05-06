@@ -32,9 +32,8 @@ impl<P: ReflectSerializerProcessor> Serialize for ListSerializer<'_, P> {
         for value in self.list.iter() {
             state.serialize_element(&TypedReflectSerializer::new_internal(
                 value,
-                item_info,
                 self.registry,
-                self.processor
+                self.processor,
             ))?;
         }
         state.end()

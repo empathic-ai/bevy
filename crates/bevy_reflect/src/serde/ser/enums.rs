@@ -67,9 +67,8 @@ impl<P: ReflectSerializerProcessor> Serialize for EnumSerializer<'_, P> {
                         field_info.name(),
                         &TypedReflectSerializer::new_internal(
                             field.value(),
-                            field_info.type_info(),
                             self.registry,
-                            self.processor
+                            self.processor,
                         ),
                     )?;
                 }
@@ -86,16 +85,15 @@ impl<P: ReflectSerializerProcessor> Serialize for EnumSerializer<'_, P> {
                 {
                     serializer.serialize_some(&TypedReflectSerializer::new_internal(
                         field,
-                        info,
                         self.registry,
-                        self.processor
+                        self.processor,
                     ))
                 } else {
                     serializer.serialize_newtype_variant(
                         enum_name,
                         variant_index,
                         variant_name,
-                        &TypedReflectSerializer::new_internal(field, info, self.registry, self.processor),
+                        &TypedReflectSerializer::new_internal(field, self.registry, self.processor),
                     )
                 }
             }
@@ -109,11 +107,8 @@ impl<P: ReflectSerializerProcessor> Serialize for EnumSerializer<'_, P> {
                     field_len,
                 )?;
                 for (index, field) in self.enum_value.iter_fields().enumerate() {
-                    let info = variant_info.field_at(index).unwrap().type_info();
-
                     state.serialize_field(&TypedReflectSerializer::new_internal(
                         field.value(),
-                        info,
                         self.registry,
                         self.processor,
                     ))?;

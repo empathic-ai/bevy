@@ -9,9 +9,11 @@ use bevy::{
     winit::WinitSettings,
 };
 
-// the `bevy_main` proc_macro generates the required boilerplate for iOS and Android
+// the `bevy_main` proc_macro generates the required boilerplate for Android
 #[bevy_main]
-fn main() {
+/// The entry point for the application. Is `pub` so that it can be used from
+/// `main.rs`.
+pub fn main() {
     let mut app = App::new();
     app.add_plugins(
         DefaultPlugins
@@ -28,6 +30,10 @@ fn main() {
                     // on iOS, gestures must be enabled.
                     // This doesn't work on Android
                     recognize_rotation_gesture: true,
+                    // Only has an effect on iOS
+                    prefers_home_indicator_hidden: true,
+                    // Only has an effect on iOS
+                    prefers_status_bar_hidden: true,
                     ..default()
                 }),
                 ..default()
@@ -51,12 +57,16 @@ fn main() {
 }
 
 fn touch_camera(
-    window: Single<&Window>,
+    window: Query<&Window>,
     mut touches: EventReader<TouchInput>,
     mut camera_transform: Single<&mut Transform, With<Camera3d>>,
     mut last_position: Local<Option<Vec2>>,
     mut rotations: EventReader<RotationGesture>,
 ) {
+    let Ok(window) = window.single() else {
+        return;
+    };
+
     for touch in touches.read() {
         if touch.phase == TouchPhase::Started {
             *last_position = None;
@@ -182,12 +192,8 @@ fn setup_music(asset_server: Res<AssetServer>, mut commands: Commands) {
 // This is handled by the OS on iOS, but not on Android.
 fn handle_lifetime(
     mut lifecycle_events: EventReader<AppLifecycle>,
-    music_controller: Query<&AudioSink>,
+    music_controller: Single<&AudioSink>,
 ) {
-    let Ok(music_controller) = music_controller.get_single() else {
-        return;
-    };
-
     for event in lifecycle_events.read() {
         match event {
             AppLifecycle::Idle | AppLifecycle::WillSuspend | AppLifecycle::WillResume => {}

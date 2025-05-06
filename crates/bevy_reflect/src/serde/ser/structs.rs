@@ -41,10 +41,7 @@ impl<P: ReflectSerializerProcessor> Serialize for StructSerializer<'_, P> {
         )?;
 
         for (index, value) in self.struct_value.iter_fields().enumerate() {
-            if serialization_data
-                .map(|data| data.is_field_skipped(index))
-                .unwrap_or(false)
-            {
+            if serialization_data.is_some_and(|data| data.is_field_skipped(index)) {
                 continue;
             }
 
@@ -53,7 +50,7 @@ impl<P: ReflectSerializerProcessor> Serialize for StructSerializer<'_, P> {
             let key = struct_info.field_at(index).unwrap().name();
             state.serialize_field(
                 key,
-                &TypedReflectSerializer::new_internal(value, info, self.registry, self.processor),
+                &TypedReflectSerializer::new_internal(value, self.registry, self.processor),
             )?;
         }
         state.end()

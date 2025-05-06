@@ -32,8 +32,8 @@ impl<P: ReflectSerializerProcessor> Serialize for MapSerializer<'_, P> {
         let mut state = serializer.serialize_map(Some(self.map.len()))?;
         for (key, value) in self.map.iter() {
             state.serialize_entry(
-                &TypedReflectSerializer::new_internal(key, key_info, self.registry, self.processor),
-                &TypedReflectSerializer::new_internal(value, value_info, self.registry, self.processor),
+                &TypedReflectSerializer::new_internal(key, self.registry, self.processor),
+                &TypedReflectSerializer::new_internal(value, self.registry, self.processor),
             )?;
         }
         state.end()

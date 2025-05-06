@@ -18,23 +18,13 @@ impl<P: ReflectSerializerProcessor> Serialize for SetSerializer<'_, P> {
     where
         S: serde::Serializer,
     {
-        let type_info = self.set.get_represented_type_info().ok_or_else(|| {
-            make_custom_error(format_args!(
-                "cannot get type info for `{}`",
-                self.set.reflect_type_path()
-            ))
-        })?;
-
-        let set_info = type_info.as_set().map_err(make_custom_error)?;
-        let value_info = set_info.value_info();
 
         let mut state = serializer.serialize_seq(Some(self.set.len()))?;
         for value in self.set.iter() {
             state.serialize_element(&TypedReflectSerializer::new_internal(
                 value,
-                value_info,
                 self.registry,
-                self.processor
+                self.processor,
             ))?;
         }
         state.end()

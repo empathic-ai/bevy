@@ -29,14 +29,11 @@ impl<P: ReflectSerializerProcessor> Serialize for TupleSerializer<'_, P> {
 
         let mut state = serializer.serialize_tuple(self.tuple.field_len())?;
 
-        for (index, value) in self.tuple.iter_fields().enumerate() {
-            let info = tuple_info.field_at(index).unwrap().type_info();
-
+        for value in self.tuple.iter_fields() {
             state.serialize_element(&TypedReflectSerializer::new_internal(
                 value,
-                info,
                 self.registry,
-                self.processor
+                self.processor,
             ))?;
         }
         state.end()

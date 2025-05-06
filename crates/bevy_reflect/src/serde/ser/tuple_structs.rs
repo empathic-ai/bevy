@@ -42,7 +42,7 @@ impl<P: ReflectSerializerProcessor> Serialize for TupleStructSerializer<'_, P> {
 
             return serializer.serialize_newtype_struct(
                 tuple_struct_info.type_path_table().ident().unwrap(),
-                &TypedReflectSerializer::new_internal(field, info, self.registry, self.processor),
+                &TypedReflectSerializer::new_internal(field, self.registry, self.processor),
             );
         }
 
@@ -52,20 +52,13 @@ impl<P: ReflectSerializerProcessor> Serialize for TupleStructSerializer<'_, P> {
         )?;
 
         for (index, value) in self.tuple_struct.iter_fields().enumerate() {
-            if serialization_data
-                .map(|data| data.is_field_skipped(index))
-                .unwrap_or(false)
-            {
+            if serialization_data.is_some_and(|data| data.is_field_skipped(index)) {
                 continue;
             }
-
-            let info = tuple_struct_info.field_at(index).unwrap().type_info();
-
             state.serialize_field(&TypedReflectSerializer::new_internal(
                 value,
-                info,
                 self.registry,
-                self.processor
+                self.processor,
             ))?;
         }
         state.end()

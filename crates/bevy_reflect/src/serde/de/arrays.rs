@@ -1,7 +1,9 @@
-use crate::serde::de::registration_utils::try_get_registration;
-use crate::serde::TypedReflectDeserializer;
-use crate::{ArrayInfo, DynamicArray, TypeRegistry};
-use core::fmt::{self, Formatter};
+use crate::{
+    serde::{de::registration_utils::try_get_registration, TypedReflectDeserializer},
+    ArrayInfo, DynamicArray, TypeRegistry,
+};
+use alloc::{string::ToString, vec::Vec};
+use core::{fmt, fmt::Formatter};
 use serde::de::{Error, SeqAccess, Visitor};
 
 use super::ReflectDeserializerProcessor;
@@ -28,9 +30,11 @@ impl<'de, P: ReflectDeserializerProcessor> Visitor<'de> for ArrayVisitor<'_, P> 
     {
         let mut vec = Vec::with_capacity(seq.size_hint().unwrap_or_default());
         let registration = try_get_registration(self.array_info.item_ty(), self.registry)?;
-        while let Some(value) =
-            seq.next_element_seed(TypedReflectDeserializer::new_internal(registration, self.registry, self.processor.as_deref_mut()))?
-        {
+        while let Some(value) = seq.next_element_seed(TypedReflectDeserializer::new_internal(
+            registration,
+            self.registry,
+            self.processor.as_deref_mut(),
+        ))? {
             vec.push(value);
         }
 

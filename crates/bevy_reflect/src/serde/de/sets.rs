@@ -27,12 +27,9 @@ impl<'de, P: ReflectDeserializerProcessor> Visitor<'de> for SetVisitor<'_, P> {
         V: SeqAccess<'de>,
     {
         let mut dynamic_set = DynamicSet::default();
-        let value_data = try_get_registration(
-            self.set_info.value_ty(),
-            self.registry,
-        )?;
+        let value_registration = try_get_registration(self.set_info.value_ty(), self.registry)?;
         while let Some(value) = set.next_element_seed(TypedReflectDeserializer::new_internal(
-            value_data,
+            value_registration,
             self.registry,
             self.processor.as_deref_mut(),
         ))? {

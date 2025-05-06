@@ -39,9 +39,12 @@ impl<'de, P: ReflectDeserializerProcessor> Visitor<'de> for OptionVisitor<'_, P>
         match variant_info {
             VariantInfo::Tuple(tuple_info) if tuple_info.field_len() == 1 => {
                 let field = tuple_info.field_at(0).unwrap();
-                let ty = *field.ty();
-                let data = try_get_registration(ty, self.registry)?;
-                let de = TypedReflectDeserializer::new_internal(data, self.registry, self.processor);
+                let registration = try_get_registration(*field.ty(), self.registry)?;
+                let de = TypedReflectDeserializer::new_internal(
+                    registration,
+                    self.registry,
+                    self.processor,
+                );
                 let mut value = DynamicTuple::default();
                 value.insert_boxed(de.deserialize(deserializer)?);
                 let mut option = DynamicEnum::default();

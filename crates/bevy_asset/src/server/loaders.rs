@@ -2,17 +2,21 @@ use crate::{
     loader::{AssetLoader, ErasedAssetLoader},
     path::AssetPath,
 };
-use alloc::sync::Arc;
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use async_broadcast::RecvError;
+use bevy_platform::collections::HashMap;
 use bevy_tasks::IoTaskPool;
-use bevy_utils::{tracing::warn, HashMap, TypeIdMap};
-#[cfg(feature = "trace")]
-use bevy_utils::{
-    tracing::{info_span, instrument::Instrument},
-    ConditionalSendFuture,
-};
+use bevy_utils::TypeIdMap;
 use core::any::TypeId;
-use derive_more::derive::{Display, Error, From};
+use thiserror::Error;
+use tracing::warn;
+
+#[cfg(feature = "trace")]
+use {
+    alloc::string::ToString,
+    bevy_tasks::ConditionalSendFuture,
+    tracing::{info_span, instrument::Instrument},
+};
 
 #[derive(Default)]
 pub(crate) struct AssetLoaders {
@@ -284,9 +288,10 @@ impl AssetLoaders {
     }
 }
 
-#[derive(Error, Display, Debug, Clone, From)]
+#[derive(Error, Debug, Clone)]
 pub(crate) enum GetLoaderError {
-    CouldNotResolve(RecvError),
+    #[error(transparent)]
+    CouldNotResolve(#[from] RecvError),
 }
 
 #[derive(Clone)]
@@ -337,6 +342,7 @@ impl<T: AssetLoader> AssetLoader for InstrumentedAssetLoader<T> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::{format, string::String};
     use core::marker::PhantomData;
     use std::{
         path::Path,
@@ -346,22 +352,18 @@ mod tests {
     use bevy_reflect::TypePath;
     use bevy_tasks::block_on;
 
-    use crate::{self as bevy_asset, Asset};
+    use crate::Asset;
 
     use super::*;
 
-    // The compiler notices these fields are never read and raises a dead_code lint which kill CI.
-    #[allow(dead_code)]
     #[derive(Asset, TypePath, Debug)]
-    struct A(usize);
+    struct A;
 
-    #[allow(dead_code)]
     #[derive(Asset, TypePath, Debug)]
-    struct B(usize);
+    struct B;
 
-    #[allow(dead_code)]
     #[derive(Asset, TypePath, Debug)]
-    struct C(usize);
+    struct C;
 
     struct Loader<A: Asset, const N: usize, const E: usize> {
         sender: Sender<()>,

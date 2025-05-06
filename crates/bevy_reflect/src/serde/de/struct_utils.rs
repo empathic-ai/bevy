@@ -9,6 +9,7 @@ use crate::{
     },
     DynamicStruct, NamedField, StructInfo, StructVariantInfo, TypeRegistration, TypeRegistry,
 };
+use alloc::string::ToString;
 use core::slice::Iter;
 use serde::de::{Error, MapAccess, SeqAccess};
 
@@ -108,7 +109,11 @@ where
             ))
         })?;
         let registration = try_get_registration(*field.ty(), registry)?;
-        let value = map.next_value_seed(TypedReflectDeserializer::new_internal(registration, registry, processor.as_deref_mut()))?;
+        let value = map.next_value_seed(TypedReflectDeserializer::new_internal(
+            registration,
+            registry,
+            processor.as_deref_mut(),
+        ))?;
         dynamic_struct.insert_boxed(&key, value);
     }
 

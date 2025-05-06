@@ -6,11 +6,11 @@ use crate::{
         error_utils::make_custom_error, lists::ListSerializer, maps::MapSerializer,
         sets::SetSerializer, structs::StructSerializer, tuple_structs::TupleStructSerializer,
         tuples::TupleSerializer,
-    }, PartialReflect, ReflectRef, TypeInfo, TypeRegistry
+    }, GetType, PartialReflect, ReflectRef, TypeInfo, TypeRegistry
 };
 use serde::{ser::SerializeMap, Serialize, Serializer};
 
-use super::{ReflectSerializerProcessor, Serializable};
+use super::ReflectSerializerProcessor;
 
 /// A general purpose serializer for reflected types.
 ///
@@ -129,13 +129,12 @@ impl<P: ReflectSerializerProcessor> Serialize for ReflectSerializer<'_, P> {
 
         let mut state = serializer.serialize_map(Some(1))?;
 
-        let typed_serializer = if self.is_internal {
-            TypedReflectSerializer::new_internal(self.value, Some(info), self.registry, self.processor)
+        if self.is_internal {
+            state.serialize_entry(info.type_path(), &TypedReflectSerializer::new_internal(self.value, self.registry, self.processor));
         } else {
-            TypedReflectSerializer::new(self.value, info, self.registry, self.processor)
+            state.serialize_entry(info.type_path(), &TypedReflectSerializer::new(self.value, self.registry));
         };
 
-        state.serialize_entry(info.type_path(), &typed_serializer)?;
         state.end()
     }
 }
@@ -185,29 +184,30 @@ impl<P: ReflectSerializerProcessor> Serialize for ReflectSerializer<'_, P> {
 /// [`with_processor`]: Self::with_processor
 pub struct TypedReflectSerializer<'a, P = ()> {
     value: &'a dyn PartialReflect,
-    info: Option<&'a TypeInfo>,
     registry: &'a TypeRegistry,
     processor: Option<&'a P>,
 }
 
-impl<'a, P> TypedReflectSerializer<'a, P> {
-    pub fn new(
-        value: &'a dyn PartialReflect,
-        info: &'a TypeInfo,
-        registry: &'a TypeRegistry,
-        processor: Option<&'a P>,
-    ) -> Self {
+impl<'a> TypedReflectSerializer<'a, ()> {
+    /// Creates a serializer with no processor.
+    ///
+    /// If you want to add custom logic for serializing certain values, use
+    /// [`with_processor`].
+    ///
+    /// [`with_processor`]: Self::with_processor
+    pub fn new(value: &'a dyn PartialReflect, registry: &'a TypeRegistry) -> Self {
         #[cfg(feature = "debug_stack")]
         TYPE_INFO_STACK.set(crate::type_stack::TypeStack::new());
 
-        TypedReflectSerializer {
+        Self {
             value,
-            info: Some(info),
             registry,
-            processor
+            processor: None,
         }
     }
+}
 
+impl<'a, P> TypedReflectSerializer<'a, P> {
     /// Creates a serializer with a processor.
     ///
     /// If you do not need any custom logic for handling certain values, use
@@ -216,7 +216,6 @@ impl<'a, P> TypedReflectSerializer<'a, P> {
     /// [`new`]: Self::new
     pub fn with_processor(
         value: &'a dyn PartialReflect,
-        info: &'a TypeInfo,
         registry: &'a TypeRegistry,
         processor: &'a P,
     ) -> Self {
@@ -225,7 +224,6 @@ impl<'a, P> TypedReflectSerializer<'a, P> {
 
         Self {
             value,
-            info: Some(info),
             registry,
             processor: Some(processor),
         }
@@ -234,13 +232,11 @@ impl<'a, P> TypedReflectSerializer<'a, P> {
     /// An internal constructor for creating a serializer without resetting the type info stack.
     pub(super) fn new_internal(
         value: &'a dyn PartialReflect,
-        info: Option<&'a TypeInfo>,
         registry: &'a TypeRegistry,
         processor: Option<&'a P>,
     ) -> Self {
         Self {
             value,
-            info,
             registry,
             processor,
         }
@@ -254,19 +250,16 @@ impl<P: ReflectSerializerProcessor> Serialize for TypedReflectSerializer<'_, P> 
     {
         #[cfg(feature = "debug_stack")]
         {
-            match self.info {
-                Some(info) => {
-                    TYPE_INFO_STACK.with_borrow_mut(|stack| {
-                        stack.push(*info.ty());
-                    });
-                }
-                None => {
-                    TYPE_INFO_STACK.with_borrow_mut(|stack| stack.push(self.value.ty()));
-                }
+            if let Some(info) = self.value.get_represented_type_info() {
+                TYPE_INFO_STACK.with_borrow_mut(|stack| {
+                    stack.push(*info.ty());
+                });
+            } else {
+                TYPE_INFO_STACK.with_borrow_mut(|stack| stack.push(self.value.ty()));
             }
         }
 
-        if self.info.is_none() {
+        if self.value.get_represented_type_info().is_none() {
             return ReflectSerializer::new_internal(self.value, self.registry)
                 .serialize(serializer);
         }
