@@ -466,7 +466,7 @@ mod tests {
 
         let mut world = World::default();
         // This fails because `T` has not been added to the world yet.
-        let result = world.run_system_once(system.param_warn_once());
+        let result = world.run_system_once(system);
 
         assert!(matches!(result, Err(RunSystemError::InvalidParams { .. })));
         let expected = "System bevy_ecs::system::system::tests::run_system_once_invalid_params::system did not run due to failed parameter validation: Parameter `Res<T>` failed validation: Resource does not exist";

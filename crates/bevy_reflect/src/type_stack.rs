@@ -1,6 +1,7 @@
 use crate::Type;
 use core::fmt::{Debug, Formatter};
 use core::slice::Iter;
+use alloc::vec::Vec;
 
 /// Helper struct for managing a stack of [`Type`] instances.
 ///

@@ -1005,7 +1005,7 @@ macro_rules! impl_reflect_for_hashset {
     ($ty:path) => {
         impl<V, S> Set for $ty
         where
-            V: FromReflect + MaybeTyped + TypePath + GetTypeRegistration + Eq + Hash,
+            V: FromReflect + TypePath + GetTypeRegistration + Eq + Hash,
             S: TypePath + BuildHasher + Default + Send + Sync,
         {
             fn get(&self, value: &dyn PartialReflect) -> Option<&dyn PartialReflect> {
@@ -1066,7 +1066,7 @@ macro_rules! impl_reflect_for_hashset {
         impl<V, S> PartialReflect for $ty
         where
             V: FromReflect + TypePath + GetTypeRegistration + Eq + Hash,
-            S: TypePath + BuildHasher + Send + Sync,
+            S: TypePath + BuildHasher + Default + Send + Sync,
         {
             fn get_represented_type_info(&self) -> Option<&'static TypeInfo> {
                 Some(<Self as Typed>::type_info())
@@ -1147,7 +1147,7 @@ macro_rules! impl_reflect_for_hashset {
         impl<V, S> Typed for $ty
         where
             V: FromReflect + TypePath + GetTypeRegistration + Eq + Hash,
-            S: TypePath + BuildHasher + Send + Sync,
+            S: TypePath + BuildHasher + Default + Send + Sync,
         {
             fn type_info() -> &'static TypeInfo {
                 static CELL: GenericTypeInfoCell = GenericTypeInfoCell::new();
@@ -1164,7 +1164,7 @@ macro_rules! impl_reflect_for_hashset {
         impl<V, S> GetTypeRegistration for $ty
         where
             V: FromReflect + TypePath + GetTypeRegistration + Eq + Hash,
-            S: TypePath + BuildHasher + Send + Sync,
+            S: TypePath + BuildHasher + Default + Send + Sync + Default,
         {
             fn get_type_registration() -> TypeRegistration {
                 let mut registration = TypeRegistration::of::<Self>();
@@ -1182,12 +1182,12 @@ macro_rules! impl_reflect_for_hashset {
             <V, S> for $ty
             where
                 V: FromReflect + TypePath + GetTypeRegistration + Eq + Hash,
-                S: TypePath + BuildHasher + Send + Sync,
+                S: TypePath + BuildHasher + Default + Send + Sync,
         );
 
         impl<V, S> FromReflect for $ty
         where
-            V: FromReflect + MaybeTyped + TypePath + GetTypeRegistration + Eq + Hash,
+            V: FromReflect + TypePath + GetTypeRegistration + Eq + Hash,
             S: TypePath + BuildHasher + Default + Send + Sync,
         {
             fn from_reflect(reflect: &dyn PartialReflect) -> Option<Self> {

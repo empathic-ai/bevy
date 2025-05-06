@@ -10,10 +10,6 @@ pub mod prelude {
     };
 }
 
-pub mod prelude {
-    pub use crate::{BevyDefault as _, Image, ImageFormat, TextureError};
-}
-
 mod image;
 pub use self::image::*;
 #[cfg(feature = "basis-universal")]
