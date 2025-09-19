@@ -1,4 +1,5 @@
 use crate::generics::impl_generic_info_methods;
+use crate::FromReflect;
 use crate::{
     attributes::{impl_custom_attribute_methods, CustomAttributes},
     type_info::impl_type_methods,
@@ -469,6 +470,26 @@ impl_type_path!((in bevy_reflect) DynamicStruct);
 impl Debug for DynamicStruct {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         self.debug(f)
+    }
+}
+
+// Implement DynamicTyped and Reflect for DynamicStruct so it can participate in FromReflect.
+impl crate::DynamicTyped for DynamicStruct {
+    fn reflect_type_info(&self) -> &'static TypeInfo {
+        // Provide opaque type info for the dynamic proxy type itself.
+        static CELL: crate::utility::NonGenericTypeInfoCell =
+            crate::utility::NonGenericTypeInfoCell::new();
+        CELL.get_or_set(|| TypeInfo::Opaque(crate::OpaqueInfo::new::<Self>()))
+    }
+}
+
+crate::impl_full_reflect!(for DynamicStruct);
+
+// Allow constructing a DynamicStruct from any struct-like PartialReflect by cloning to dynamic.
+impl FromReflect for DynamicStruct {
+    fn from_reflect(reflect: &dyn PartialReflect) -> Option<Self> {
+        let dyn_struct = reflect.reflect_ref().as_struct().ok()?;
+        Some(dyn_struct.to_dynamic_struct())
     }
 }
 
