@@ -1,6 +1,8 @@
+use core::any::{Any, TypeId};
+
 use crate::serde::ser::error_utils::make_custom_error;
 use crate::serde::{ReflectSerializer, SerializationData, TypedReflectSerializer};
-use crate::{ReflectRef, Struct, TypeRegistry};
+use crate::{DynamicStruct, GetType, ReflectRef, Struct, TypeRegistry};
 use serde::ser::SerializeStruct;
 use serde::Serialize;
 
@@ -46,7 +48,7 @@ impl<P: ReflectSerializerProcessor> Serialize for StructSerializer<'_, P> {
             }
 
             let key = struct_info.field_at(index).unwrap().name();
-            if value.is_dynamic() && matches!(value.reflect_ref(), ReflectRef::Struct(_)) {
+            if struct_info.field_at(index).unwrap().type_id() == TypeId::of::<DynamicStruct>() {
                 state.serialize_field(
                     key,
                     &ReflectSerializer::new_internal(value, self.registry, self.processor),
