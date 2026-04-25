@@ -1,15 +1,17 @@
 use crate::{
-    DynamicStruct, NamedField, StructInfo, StructVariantInfo, TypePath, TypeRegistration, TypeRegistry, serde::{
-        ReflectDeserializer, SerializationData, TypedReflectDeserializer, de::{
+    serde::{
+        de::{
             error_utils::make_custom_error,
             helpers::{ExpectedValues, Ident},
             registration_utils::try_get_registration,
-        }
-    }
+        },
+        SerializationData, TypedReflectDeserializer,
+    },
+    DynamicStruct, NamedField, StructInfo, StructVariantInfo, TypeRegistration, TypeRegistry,
 };
 use alloc::string::ToString;
 use core::slice::Iter;
-use serde::de::{DeserializeSeed, Error, MapAccess, SeqAccess};
+use serde::de::{Error, MapAccess, SeqAccess};
 
 use super::ReflectDeserializerProcessor;
 
@@ -107,18 +109,11 @@ where
             ))
         })?;
         let registration = try_get_registration(*field.ty(), registry)?;
-        let value = if registration.type_info().type_path() == DynamicStruct::type_path() {
-            map.next_value_seed(ReflectDeserializer::new_internal(
-                registry,
-                processor.as_deref_mut(),
-            ))?
-        } else {
-            map.next_value_seed(TypedReflectDeserializer::new_internal(
-                registration,
-                registry,
-                processor.as_deref_mut(),
-            ))?
-        };
+        let value = map.next_value_seed(TypedReflectDeserializer::new_internal(
+            registration,
+            registry,
+            processor.as_deref_mut(),
+        ))?;
         dynamic_struct.insert_boxed(&key, value);
     }
 
@@ -177,22 +172,14 @@ where
         }
 
         let field_info = info.field_at::<V::Error>(index)?;
-        let field_registration = try_get_registration(*field_info.ty(), registry)?;
 
-        let value = if field_registration.type_info().type_path() == DynamicStruct::type_path() {
-            seq.next_element_seed(ReflectDeserializer::new_internal(
+        let value = seq
+            .next_element_seed(TypedReflectDeserializer::new_internal(
+                try_get_registration(*field_info.ty(), registry)?,
                 registry,
                 processor.as_deref_mut(),
             ))?
-            .ok_or_else(|| Error::invalid_length(index, &len.to_string().as_str()))?
-        } else {
-            seq.next_element_seed(TypedReflectDeserializer::new_internal(
-                field_registration,
-                registry,
-                processor.as_deref_mut(),
-            ))?
-            .ok_or_else(|| Error::invalid_length(index, &len.to_string().as_str()))?
-        };
+            .ok_or_else(|| Error::invalid_length(index, &len.to_string().as_str()))?;
         dynamic_struct.insert_boxed(name, value);
     }
 
