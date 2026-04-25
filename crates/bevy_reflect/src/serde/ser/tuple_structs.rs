@@ -1,6 +1,6 @@
 use crate::serde::ser::error_utils::make_custom_error;
 use crate::serde::{SerializationData, TypedReflectSerializer, ReflectSerializer};
-use crate::{TupleStruct, TypeRegistry};
+use crate::{ReflectRef, TupleStruct, TypeRegistry};
 use serde::ser::SerializeTupleStruct;
 use serde::Serialize;
 
@@ -39,7 +39,7 @@ impl<P: ReflectSerializerProcessor> Serialize for TupleStructSerializer<'_, P> {
         if self.tuple_struct.field_len() == 1 && serialization_data.is_none() {
             let field = self.tuple_struct.field(0).unwrap();
 
-            return if field.is_dynamic() {
+            return if field.is_dynamic() && matches!(field.reflect_ref(), ReflectRef::Struct(_))  {
                 serializer.serialize_newtype_struct(
                     tuple_struct_info.type_path_table().ident().unwrap(),
                     &ReflectSerializer::new_internal(field, self.registry, self.processor),
@@ -62,7 +62,7 @@ impl<P: ReflectSerializerProcessor> Serialize for TupleStructSerializer<'_, P> {
                 continue;
             }
 
-            if value.is_dynamic() {
+            if value.is_dynamic() && matches!(value.reflect_ref(), ReflectRef::Struct(_))  {
                 state.serialize_field(&ReflectSerializer::new_internal(
                     value,
                     self.registry,
