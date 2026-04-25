@@ -75,19 +75,20 @@ impl<'a> ReflectSerializer<'a, ()> {
             is_internal: false,
         }
     }
-
-    /// An internal constructor for creating a serializer without resetting the type info stack.
-    fn new_internal(value: &'a dyn PartialReflect, registry: &'a TypeRegistry) -> Self {
-        Self {
-            value,
-            registry,
-            processor: None,
-            is_internal: true,
-        }
-    }
 }
 
 impl<'a, P: ReflectSerializerProcessor> ReflectSerializer<'a, P> {
+
+    /// An internal constructor for creating a serializer without resetting the type info stack.
+    pub fn new_internal(value: &'a dyn PartialReflect, registry: &'a TypeRegistry, processor: Option<&'a P>) -> Self {
+        Self {
+            value,
+            registry,
+            processor: processor,
+            is_internal: true,
+        }
+    }
+
     /// Creates a serializer with a processor.
     ///
     /// If you do not need any custom logic for handling certain values, use
@@ -260,7 +261,7 @@ impl<P: ReflectSerializerProcessor> Serialize for TypedReflectSerializer<'_, P> 
         }
 
         if self.value.get_represented_type_info().is_none() {
-            return ReflectSerializer::new_internal(self.value, self.registry)
+            return ReflectSerializer::new_internal(self.value, self.registry, self.processor)
                 .serialize(serializer);
         }
 

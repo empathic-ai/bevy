@@ -1,5 +1,5 @@
 use crate::serde::ser::error_utils::make_custom_error;
-use crate::serde::{SerializationData, TypedReflectSerializer};
+use crate::serde::{ReflectSerializer, SerializationData, TypedReflectSerializer};
 use crate::{Struct, TypeRegistry};
 use serde::ser::SerializeStruct;
 use serde::Serialize;
@@ -45,13 +45,18 @@ impl<P: ReflectSerializerProcessor> Serialize for StructSerializer<'_, P> {
                 continue;
             }
 
-            let info = struct_info.field_at(index).unwrap().type_info();
-
             let key = struct_info.field_at(index).unwrap().name();
-            state.serialize_field(
-                key,
-                &TypedReflectSerializer::new_internal(value, self.registry, self.processor),
-            )?;
+            if value.is_dynamic() {
+                state.serialize_field(
+                    key,
+                    &ReflectSerializer::new_internal(value, self.registry, self.processor),
+                )?;
+            } else {
+                state.serialize_field(
+                    key,
+                    &TypedReflectSerializer::new_internal(value, self.registry, self.processor),
+                )?;
+            }
         }
         state.end()
     }

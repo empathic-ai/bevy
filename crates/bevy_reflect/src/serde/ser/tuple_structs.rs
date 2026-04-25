@@ -1,5 +1,5 @@
 use crate::serde::ser::error_utils::make_custom_error;
-use crate::serde::{SerializationData, TypedReflectSerializer};
+use crate::serde::{SerializationData, TypedReflectSerializer, ReflectSerializer};
 use crate::{TupleStruct, TypeRegistry};
 use serde::ser::SerializeTupleStruct;
 use serde::Serialize;
@@ -38,12 +38,18 @@ impl<P: ReflectSerializerProcessor> Serialize for TupleStructSerializer<'_, P> {
 
         if self.tuple_struct.field_len() == 1 && serialization_data.is_none() {
             let field = self.tuple_struct.field(0).unwrap();
-            let info = tuple_struct_info.field_at(0).unwrap().type_info();
 
-            return serializer.serialize_newtype_struct(
-                tuple_struct_info.type_path_table().ident().unwrap(),
-                &TypedReflectSerializer::new_internal(field, self.registry, self.processor),
-            );
+            return if field.is_dynamic() {
+                serializer.serialize_newtype_struct(
+                    tuple_struct_info.type_path_table().ident().unwrap(),
+                    &ReflectSerializer::new_internal(field, self.registry, self.processor),
+                )
+            } else {
+                serializer.serialize_newtype_struct(
+                    tuple_struct_info.type_path_table().ident().unwrap(),
+                    &TypedReflectSerializer::new_internal(field, self.registry, self.processor),
+                )
+            };
         }
 
         let mut state = serializer.serialize_tuple_struct(
@@ -55,11 +61,20 @@ impl<P: ReflectSerializerProcessor> Serialize for TupleStructSerializer<'_, P> {
             if serialization_data.is_some_and(|data| data.is_field_skipped(index)) {
                 continue;
             }
-            state.serialize_field(&TypedReflectSerializer::new_internal(
-                value,
-                self.registry,
-                self.processor,
-            ))?;
+
+            if value.is_dynamic() {
+                state.serialize_field(&ReflectSerializer::new_internal(
+                    value,
+                    self.registry,
+                    self.processor,
+                ))?;
+            } else {
+                state.serialize_field(&TypedReflectSerializer::new_internal(
+                    value,
+                    self.registry,
+                    self.processor,
+                ))?;
+            }
         }
         state.end()
     }
