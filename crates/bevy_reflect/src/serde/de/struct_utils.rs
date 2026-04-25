@@ -106,13 +106,15 @@ where
                 ExpectedValues::from_iter(fields)
             ))
         })?;
-        let registration = try_get_registration(*field.ty(), registry)?;
+
         let value = if field.type_id() == TypeId::of::<DynamicStruct>() {
             map.next_value_seed(ReflectDeserializer::new_internal(
                 registry,
                 processor.as_deref_mut(),
             ))?
         } else {
+            let registration = try_get_registration(*field.ty(), registry)?;
+
             map.next_value_seed(TypedReflectDeserializer::new_internal(
                 registration,
                 registry,
@@ -177,7 +179,6 @@ where
         }
 
         let field_info = info.field_at::<V::Error>(index)?;
-        let field_registration = try_get_registration(*field_info.ty(), registry)?;
 
         let value = if field_info.type_id() == TypeId::of::<DynamicStruct>() {
             seq.next_element_seed(ReflectDeserializer::new_internal(
@@ -186,6 +187,8 @@ where
             ))?
             .ok_or_else(|| Error::invalid_length(index, &len.to_string().as_str()))?
         } else {
+            let field_registration = try_get_registration(*field_info.ty(), registry)?;
+
             seq.next_element_seed(TypedReflectDeserializer::new_internal(
                 field_registration,
                 registry,
