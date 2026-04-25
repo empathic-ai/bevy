@@ -8,7 +8,7 @@ use crate::{
     }
 };
 use alloc::string::ToString;
-use core::slice::Iter;
+use core::{any::TypeId, slice::Iter};
 use serde::de::{DeserializeSeed, Error, MapAccess, SeqAccess};
 
 use super::ReflectDeserializerProcessor;
@@ -107,7 +107,7 @@ where
             ))
         })?;
         let registration = try_get_registration(*field.ty(), registry)?;
-        let value = if registration.type_info().type_path() == DynamicStruct::type_path() {
+        let value = if field.type_id() == TypeId::of::<DynamicStruct>() {
             map.next_value_seed(ReflectDeserializer::new_internal(
                 registry,
                 processor.as_deref_mut(),
@@ -179,7 +179,7 @@ where
         let field_info = info.field_at::<V::Error>(index)?;
         let field_registration = try_get_registration(*field_info.ty(), registry)?;
 
-        let value = if field_registration.type_info().type_path() == DynamicStruct::type_path() {
+        let value = if field_info.type_id() == TypeId::of::<DynamicStruct>() {
             seq.next_element_seed(ReflectDeserializer::new_internal(
                 registry,
                 processor.as_deref_mut(),
