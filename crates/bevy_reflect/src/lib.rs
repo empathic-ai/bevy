@@ -734,7 +734,7 @@ mod tests {
         vec,
         vec::Vec,
     };
-    use bevy_platform::collections::HashMap;
+    use bevy_platform::collections::{HashMap, HashSet};
     use core::{
         any::TypeId,
         fmt::{Debug, Formatter},
@@ -1346,6 +1346,73 @@ mod tests {
         assert!(!not_expected
             .reflect_partial_eq(reflected.as_partial_reflect())
             .unwrap_or_default());
+    }
+
+    #[test]
+    fn dynamic_types_should_from_reflect() {
+        #[derive(Reflect)]
+        struct MyTupleStruct(u32, bool);
+
+        #[derive(Reflect)]
+        enum MyEnum {
+            Tuple(u32, bool),
+        }
+
+        let dynamic_array = <DynamicArray as FromReflect>::from_reflect(&[1_u32, 2, 3]).unwrap();
+        assert_eq!(dynamic_array.len(), 3);
+        assert_eq!(
+            dynamic_array.get(0).unwrap().try_downcast_ref::<u32>(),
+            Some(&1)
+        );
+
+        let dynamic_tuple = <DynamicTuple as FromReflect>::from_reflect(&(1_u32, true)).unwrap();
+        assert_eq!(dynamic_tuple.field_len(), 2);
+        assert_eq!(
+            dynamic_tuple.field(1).unwrap().try_downcast_ref::<bool>(),
+            Some(&true)
+        );
+
+        let dynamic_tuple_struct =
+            <DynamicTupleStruct as FromReflect>::from_reflect(&MyTupleStruct(1, true)).unwrap();
+        assert_eq!(dynamic_tuple_struct.field_len(), 2);
+        assert_eq!(
+            dynamic_tuple_struct
+                .field(0)
+                .unwrap()
+                .try_downcast_ref::<u32>(),
+            Some(&1)
+        );
+
+        let dynamic_list = <DynamicList as FromReflect>::from_reflect(&vec![1_u32, 2, 3]).unwrap();
+        assert_eq!(dynamic_list.len(), 3);
+        assert_eq!(
+            dynamic_list.get(2).unwrap().try_downcast_ref::<u32>(),
+            Some(&3)
+        );
+
+        let mut map = HashMap::<u32, bool>::default();
+        map.insert(1_u32, true);
+        let dynamic_map = <DynamicMap as FromReflect>::from_reflect(&map).unwrap();
+        assert_eq!(dynamic_map.len(), 1);
+        assert_eq!(
+            dynamic_map.get(&1_u32).unwrap().try_downcast_ref::<bool>(),
+            Some(&true)
+        );
+
+        let mut set = HashSet::<u32>::default();
+        set.insert(1_u32);
+        let dynamic_set = <DynamicSet as FromReflect>::from_reflect(&set).unwrap();
+        assert_eq!(dynamic_set.len(), 1);
+        assert!(dynamic_set.contains(&1_u32));
+
+        let dynamic_enum =
+            <DynamicEnum as FromReflect>::from_reflect(&MyEnum::Tuple(1, true)).unwrap();
+        assert_eq!(dynamic_enum.variant_name(), "Tuple");
+        assert_eq!(dynamic_enum.field_len(), 2);
+        assert_eq!(
+            dynamic_enum.field_at(0).unwrap().try_downcast_ref::<u32>(),
+            Some(&1)
+        );
     }
 
     #[test]

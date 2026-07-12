@@ -6,7 +6,8 @@ use crate::{
         error_utils::make_custom_error, lists::ListSerializer, maps::MapSerializer,
         sets::SetSerializer, structs::StructSerializer, tuple_structs::TupleStructSerializer,
         tuples::TupleSerializer,
-    }, GetType, PartialReflect, ReflectRef, TypeInfo, TypeRegistry
+    },
+    GetType, PartialReflect, ReflectRef, TypeRegistry,
 };
 use serde::{ser::SerializeMap, Serialize, Serializer};
 
@@ -78,13 +79,16 @@ impl<'a> ReflectSerializer<'a, ()> {
 }
 
 impl<'a, P: ReflectSerializerProcessor> ReflectSerializer<'a, P> {
-
     /// An internal constructor for creating a serializer without resetting the type info stack.
-    pub fn new_internal(value: &'a dyn PartialReflect, registry: &'a TypeRegistry, processor: Option<&'a P>) -> Self {
+    pub fn new_internal(
+        value: &'a dyn PartialReflect,
+        registry: &'a TypeRegistry,
+        processor: Option<&'a P>,
+    ) -> Self {
         Self {
             value,
             registry,
-            processor: processor,
+            processor,
             is_internal: true,
         }
     }
@@ -104,7 +108,7 @@ impl<'a, P: ReflectSerializerProcessor> ReflectSerializer<'a, P> {
             value,
             registry,
             processor: Some(processor),
-            is_internal: false
+            is_internal: false,
         }
     }
 }
@@ -130,13 +134,52 @@ impl<P: ReflectSerializerProcessor> Serialize for ReflectSerializer<'_, P> {
 
         let mut state = serializer.serialize_map(Some(1))?;
 
+        #[cfg(feature = "debug_stack")]
         if self.is_internal {
-            state.serialize_entry(info.type_path(), &TypedReflectSerializer::new_internal(self.value, self.registry, self.processor));
+            TYPE_INFO_STACK.with_borrow_mut(|stack| {
+                let ty = if self.value.is_dynamic() {
+                    match self.value.reflect_ref() {
+                        ReflectRef::Struct(_) => crate::Type::of::<crate::DynamicStruct>(),
+                        ReflectRef::TupleStruct(_) => {
+                            crate::Type::of::<crate::DynamicTupleStruct>()
+                        }
+                        ReflectRef::Tuple(_) => crate::Type::of::<crate::DynamicTuple>(),
+                        ReflectRef::List(_) => crate::Type::of::<crate::DynamicList>(),
+                        ReflectRef::Array(_) => crate::Type::of::<crate::DynamicArray>(),
+                        ReflectRef::Map(_) => crate::Type::of::<crate::DynamicMap>(),
+                        ReflectRef::Set(_) => crate::Type::of::<crate::DynamicSet>(),
+                        ReflectRef::Enum(_) => crate::Type::of::<crate::DynamicEnum>(),
+                        ReflectRef::Opaque(_) => self.value.ty(),
+                        #[cfg(feature = "functions")]
+                        ReflectRef::Function(_) => self.value.ty(),
+                    }
+                } else {
+                    self.value.ty()
+                };
+                stack.push(ty);
+            });
+        }
+
+        let output = if self.is_internal {
+            state.serialize_entry(
+                info.type_path(),
+                &TypedReflectSerializer::new_internal(self.value, self.registry, self.processor),
+            )
         } else {
-            state.serialize_entry(info.type_path(), &TypedReflectSerializer::new(self.value, self.registry));
+            state.serialize_entry(
+                info.type_path(),
+                &TypedReflectSerializer::new(self.value, self.registry),
+            )
         };
 
-        state.end()
+        let output = output.and_then(|()| state.end());
+
+        #[cfg(feature = "debug_stack")]
+        if self.is_internal {
+            TYPE_INFO_STACK.with_borrow_mut(crate::type_stack::TypeStack::pop);
+        }
+
+        output
     }
 }
 

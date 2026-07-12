@@ -4,8 +4,8 @@ use crate::generics::impl_generic_info_methods;
 use crate::{
     attributes::{impl_custom_attribute_methods, CustomAttributes},
     type_info::impl_type_methods,
-    ApplyError, DynamicTuple, Generics, PartialReflect, Reflect, ReflectKind, ReflectMut,
-    ReflectOwned, ReflectRef, Tuple, Type, TypeInfo, TypePath, UnnamedField,
+    ApplyError, DynamicTuple, FromReflect, Generics, PartialReflect, Reflect, ReflectKind,
+    ReflectMut, ReflectOwned, ReflectRef, Tuple, Type, TypeInfo, TypePath, UnnamedField,
 };
 use alloc::{boxed::Box, vec::Vec};
 use bevy_platform::sync::Arc;
@@ -379,6 +379,26 @@ impl_type_path!((in bevy_reflect) DynamicTupleStruct);
 impl Debug for DynamicTupleStruct {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         self.debug(f)
+    }
+}
+
+// Implement DynamicTyped and Reflect for DynamicTupleStruct so it can participate in FromReflect.
+impl crate::DynamicTyped for DynamicTupleStruct {
+    fn reflect_type_info(&self) -> &'static TypeInfo {
+        // Provide opaque type info for the dynamic proxy type itself.
+        static CELL: crate::utility::NonGenericTypeInfoCell =
+            crate::utility::NonGenericTypeInfoCell::new();
+        CELL.get_or_set(|| TypeInfo::Opaque(crate::OpaqueInfo::new::<Self>()))
+    }
+}
+
+crate::impl_full_reflect!(for DynamicTupleStruct);
+
+// Allow constructing a DynamicTupleStruct from any tuple-struct-like PartialReflect by cloning to dynamic.
+impl FromReflect for DynamicTupleStruct {
+    fn from_reflect(reflect: &dyn PartialReflect) -> Option<Self> {
+        let dyn_tuple_struct = reflect.reflect_ref().as_tuple_struct().ok()?;
+        Some(dyn_tuple_struct.to_dynamic_tuple_struct())
     }
 }
 

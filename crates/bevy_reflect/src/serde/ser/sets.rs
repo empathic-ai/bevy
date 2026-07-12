@@ -18,7 +18,6 @@ impl<P: ReflectSerializerProcessor> Serialize for SetSerializer<'_, P> {
     where
         S: serde::Serializer,
     {
-
         let mut state = serializer.serialize_seq(Some(self.set.len()))?;
         for value in self.set.iter() {
             state.serialize_element(&TypedReflectSerializer::new_internal(

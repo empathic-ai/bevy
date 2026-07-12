@@ -360,6 +360,26 @@ impl PartialReflect for DynamicTuple {
 
 impl_type_path!((in bevy_reflect) DynamicTuple);
 
+// Implement DynamicTyped and Reflect for DynamicTuple so it can participate in FromReflect.
+impl crate::DynamicTyped for DynamicTuple {
+    fn reflect_type_info(&self) -> &'static TypeInfo {
+        // Provide opaque type info for the dynamic proxy type itself.
+        static CELL: crate::utility::NonGenericTypeInfoCell =
+            crate::utility::NonGenericTypeInfoCell::new();
+        CELL.get_or_set(|| TypeInfo::Opaque(crate::OpaqueInfo::new::<Self>()))
+    }
+}
+
+crate::impl_full_reflect!(for DynamicTuple);
+
+// Allow constructing a DynamicTuple from any tuple-like PartialReflect by cloning to dynamic.
+impl FromReflect for DynamicTuple {
+    fn from_reflect(reflect: &dyn PartialReflect) -> Option<Self> {
+        let dyn_tuple = reflect.reflect_ref().as_tuple().ok()?;
+        Some(dyn_tuple.to_dynamic_tuple())
+    }
+}
+
 impl FromIterator<Box<dyn PartialReflect>> for DynamicTuple {
     fn from_iter<I: IntoIterator<Item = Box<dyn PartialReflect>>>(fields: I) -> Self {
         Self {

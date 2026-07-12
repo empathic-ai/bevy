@@ -2,8 +2,8 @@ use bevy_reflect_derive::impl_type_path;
 
 use crate::{
     enum_debug, enum_hash, enum_partial_eq, ApplyError, DynamicStruct, DynamicTuple, Enum,
-    PartialReflect, Reflect, ReflectKind, ReflectMut, ReflectOwned, ReflectRef, Struct, Tuple,
-    TypeInfo, VariantFieldIter, VariantType,
+    FromReflect, PartialReflect, Reflect, ReflectKind, ReflectMut, ReflectOwned, ReflectRef,
+    Struct, Tuple, TypeInfo, VariantFieldIter, VariantType,
 };
 
 use alloc::{boxed::Box, string::String};
@@ -417,3 +417,23 @@ impl PartialReflect for DynamicEnum {
 }
 
 impl_type_path!((in bevy_reflect) DynamicEnum);
+
+// Implement DynamicTyped and Reflect for DynamicEnum so it can participate in FromReflect.
+impl crate::DynamicTyped for DynamicEnum {
+    fn reflect_type_info(&self) -> &'static TypeInfo {
+        // Provide opaque type info for the dynamic proxy type itself.
+        static CELL: crate::utility::NonGenericTypeInfoCell =
+            crate::utility::NonGenericTypeInfoCell::new();
+        CELL.get_or_set(|| TypeInfo::Opaque(crate::OpaqueInfo::new::<Self>()))
+    }
+}
+
+crate::impl_full_reflect!(for DynamicEnum);
+
+// Allow constructing a DynamicEnum from any enum-like PartialReflect by cloning to dynamic.
+impl FromReflect for DynamicEnum {
+    fn from_reflect(reflect: &dyn PartialReflect) -> Option<Self> {
+        let dyn_enum = reflect.reflect_ref().as_enum().ok()?;
+        Some(dyn_enum.to_dynamic_enum())
+    }
+}

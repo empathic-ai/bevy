@@ -124,7 +124,10 @@ impl<'a> ReflectDeserializer<'a, ()> {
 
 impl<'a, P: ReflectDeserializerProcessor> ReflectDeserializer<'a, P> {
     pub(super) fn new_internal(registry: &'a TypeRegistry, processor: Option<&'a mut P>) -> Self {
-        Self { registry, processor }
+        Self {
+            registry,
+            processor,
+        }
     }
 
     /// Creates a deserializer with a processor.

@@ -344,6 +344,26 @@ impl Debug for DynamicList {
     }
 }
 
+// Implement DynamicTyped and Reflect for DynamicList so it can participate in FromReflect.
+impl crate::DynamicTyped for DynamicList {
+    fn reflect_type_info(&self) -> &'static TypeInfo {
+        // Provide opaque type info for the dynamic proxy type itself.
+        static CELL: crate::utility::NonGenericTypeInfoCell =
+            crate::utility::NonGenericTypeInfoCell::new();
+        CELL.get_or_set(|| TypeInfo::Opaque(crate::OpaqueInfo::new::<Self>()))
+    }
+}
+
+crate::impl_full_reflect!(for DynamicList);
+
+// Allow constructing a DynamicList from any list-like PartialReflect by cloning to dynamic.
+impl FromReflect for DynamicList {
+    fn from_reflect(reflect: &dyn PartialReflect) -> Option<Self> {
+        let dyn_list = reflect.reflect_ref().as_list().ok()?;
+        Some(dyn_list.to_dynamic_list())
+    }
+}
+
 impl FromIterator<Box<dyn PartialReflect>> for DynamicList {
     fn from_iter<I: IntoIterator<Item = Box<dyn PartialReflect>>>(values: I) -> Self {
         Self {
@@ -524,7 +544,7 @@ pub fn list_debug(dyn_list: &dyn List, f: &mut Formatter<'_>) -> core::fmt::Resu
 #[cfg(test)]
 mod tests {
     use super::DynamicList;
-    use crate::Reflect;
+    use crate::{FromReflect, List, Reflect};
     use alloc::{boxed::Box, vec};
     use core::assert_eq;
 
@@ -564,5 +584,16 @@ mod tests {
         assert!(iter.index == SIZE);
         assert!(iter.next().is_none());
         assert!(iter.index == SIZE);
+    }
+
+    #[test]
+    fn dynamic_list_should_from_reflect() {
+        let reflected = vec![1_u32, 2, 3];
+        let dynamic = <DynamicList as FromReflect>::from_reflect(&reflected).unwrap();
+
+        assert_eq!(dynamic.len(), 3);
+        assert_eq!(dynamic.get(0).unwrap().try_downcast_ref::<u32>(), Some(&1));
+        assert_eq!(dynamic.get(1).unwrap().try_downcast_ref::<u32>(), Some(&2));
+        assert_eq!(dynamic.get(2).unwrap().try_downcast_ref::<u32>(), Some(&3));
     }
 }

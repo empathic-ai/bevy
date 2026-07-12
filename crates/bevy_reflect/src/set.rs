@@ -4,11 +4,10 @@ use core::fmt::{Debug, Formatter};
 use bevy_platform::collections::{hash_table::OccupiedEntry as HashTableOccupiedEntry, HashTable};
 use bevy_reflect_derive::impl_type_path;
 
-use crate::MaybeTyped;
 use crate::{
     generics::impl_generic_info_methods, hash_error, type_info::impl_type_methods, ApplyError,
-    Generics, PartialReflect, Reflect, ReflectKind, ReflectMut, ReflectOwned, ReflectRef, Type,
-    TypeInfo, TypePath,
+    FromReflect, Generics, PartialReflect, Reflect, ReflectKind, ReflectMut, ReflectOwned,
+    ReflectRef, Type, TypeInfo, TypePath,
 };
 
 /// A trait used to power [set-like] operations via [reflection].
@@ -333,6 +332,26 @@ impl_type_path!((in bevy_reflect) DynamicSet);
 impl Debug for DynamicSet {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         self.debug(f)
+    }
+}
+
+// Implement DynamicTyped and Reflect for DynamicSet so it can participate in FromReflect.
+impl crate::DynamicTyped for DynamicSet {
+    fn reflect_type_info(&self) -> &'static TypeInfo {
+        // Provide opaque type info for the dynamic proxy type itself.
+        static CELL: crate::utility::NonGenericTypeInfoCell =
+            crate::utility::NonGenericTypeInfoCell::new();
+        CELL.get_or_set(|| TypeInfo::Opaque(crate::OpaqueInfo::new::<Self>()))
+    }
+}
+
+crate::impl_full_reflect!(for DynamicSet);
+
+// Allow constructing a DynamicSet from any set-like PartialReflect by cloning to dynamic.
+impl FromReflect for DynamicSet {
+    fn from_reflect(reflect: &dyn PartialReflect) -> Option<Self> {
+        let dyn_set = reflect.reflect_ref().as_set().ok()?;
+        Some(dyn_set.to_dynamic_set())
     }
 }
 

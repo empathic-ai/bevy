@@ -1,15 +1,19 @@
+#[cfg(feature = "debug_stack")]
+use crate::serde::de::error_utils::TYPE_INFO_STACK;
 use crate::{
-    DynamicStruct, NamedField, StructInfo, StructVariantInfo, TypePath, TypeRegistration, TypeRegistry, serde::{
-        ReflectDeserializer, SerializationData, TypedReflectDeserializer, de::{
+    serde::{
+        de::{
             error_utils::make_custom_error,
             helpers::{ExpectedValues, Ident},
             registration_utils::try_get_registration,
-        }
-    }
+        },
+        ReflectDeserializer, SerializationData, TypedReflectDeserializer,
+    },
+    DynamicStruct, NamedField, StructInfo, StructVariantInfo, TypeRegistration, TypeRegistry,
 };
 use alloc::string::ToString;
 use core::{any::TypeId, slice::Iter};
-use serde::de::{DeserializeSeed, Error, MapAccess, SeqAccess};
+use serde::de::{Error, MapAccess, SeqAccess};
 
 use super::ReflectDeserializerProcessor;
 
@@ -108,10 +112,18 @@ where
         })?;
 
         let value = if field.type_id() == TypeId::of::<DynamicStruct>() {
-            map.next_value_seed(ReflectDeserializer::new_internal(
+            #[cfg(feature = "debug_stack")]
+            TYPE_INFO_STACK.with_borrow_mut(|stack| stack.push(crate::Type::of::<DynamicStruct>()));
+
+            let value = map.next_value_seed(ReflectDeserializer::new_internal(
                 registry,
                 processor.as_deref_mut(),
-            ))?
+            ));
+
+            #[cfg(feature = "debug_stack")]
+            TYPE_INFO_STACK.with_borrow_mut(crate::type_stack::TypeStack::pop);
+
+            value?
         } else {
             let registration = try_get_registration(*field.ty(), registry)?;
 
@@ -181,11 +193,18 @@ where
         let field_info = info.field_at::<V::Error>(index)?;
 
         let value = if field_info.type_id() == TypeId::of::<DynamicStruct>() {
-            seq.next_element_seed(ReflectDeserializer::new_internal(
+            #[cfg(feature = "debug_stack")]
+            TYPE_INFO_STACK.with_borrow_mut(|stack| stack.push(crate::Type::of::<DynamicStruct>()));
+
+            let value = seq.next_element_seed(ReflectDeserializer::new_internal(
                 registry,
                 processor.as_deref_mut(),
-            ))?
-            .ok_or_else(|| Error::invalid_length(index, &len.to_string().as_str()))?
+            ));
+
+            #[cfg(feature = "debug_stack")]
+            TYPE_INFO_STACK.with_borrow_mut(crate::type_stack::TypeStack::pop);
+
+            value?.ok_or_else(|| Error::invalid_length(index, &len.to_string().as_str()))?
         } else {
             let field_registration = try_get_registration(*field_info.ty(), registry)?;
 

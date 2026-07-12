@@ -1,8 +1,8 @@
 use crate::generics::impl_generic_info_methods;
 use crate::{
-    type_info::impl_type_methods, utility::reflect_hasher, ApplyError, Generics, MaybeTyped,
-    PartialReflect, Reflect, ReflectKind, ReflectMut, ReflectOwned, ReflectRef, Type, TypeInfo,
-    TypePath,
+    type_info::impl_type_methods, utility::reflect_hasher, ApplyError, FromReflect, Generics,
+    MaybeTyped, PartialReflect, Reflect, ReflectKind, ReflectMut, ReflectOwned, ReflectRef, Type,
+    TypeInfo, TypePath,
 };
 use alloc::{boxed::Box, vec::Vec};
 use bevy_reflect_derive::impl_type_path;
@@ -347,6 +347,26 @@ impl<'a> IntoIterator for &'a DynamicArray {
 }
 
 impl_type_path!((in bevy_reflect) DynamicArray);
+
+// Implement DynamicTyped and Reflect for DynamicArray so it can participate in FromReflect.
+impl crate::DynamicTyped for DynamicArray {
+    fn reflect_type_info(&self) -> &'static TypeInfo {
+        // Provide opaque type info for the dynamic proxy type itself.
+        static CELL: crate::utility::NonGenericTypeInfoCell =
+            crate::utility::NonGenericTypeInfoCell::new();
+        CELL.get_or_set(|| TypeInfo::Opaque(crate::OpaqueInfo::new::<Self>()))
+    }
+}
+
+crate::impl_full_reflect!(for DynamicArray);
+
+// Allow constructing a DynamicArray from any array-like PartialReflect by cloning to dynamic.
+impl FromReflect for DynamicArray {
+    fn from_reflect(reflect: &dyn PartialReflect) -> Option<Self> {
+        let dyn_array = reflect.reflect_ref().as_array().ok()?;
+        Some(dyn_array.to_dynamic_array())
+    }
+}
 
 /// An iterator over an [`Array`].
 pub struct ArrayIter<'a> {

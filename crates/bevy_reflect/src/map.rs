@@ -4,9 +4,9 @@ use bevy_platform::collections::HashTable;
 use bevy_reflect_derive::impl_type_path;
 
 use crate::{
-    generics::impl_generic_info_methods, type_info::impl_type_methods, ApplyError, Generics,
-    MaybeTyped, PartialReflect, Reflect, ReflectKind, ReflectMut, ReflectOwned, ReflectRef, Type,
-    TypeInfo, TypePath,
+    generics::impl_generic_info_methods, type_info::impl_type_methods, ApplyError, FromReflect,
+    Generics, MaybeTyped, PartialReflect, Reflect, ReflectKind, ReflectMut, ReflectOwned,
+    ReflectRef, Type, TypeInfo, TypePath,
 };
 use alloc::{boxed::Box, format, vec::Vec};
 
@@ -453,6 +453,26 @@ impl_type_path!((in bevy_reflect) DynamicMap);
 impl Debug for DynamicMap {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         self.debug(f)
+    }
+}
+
+// Implement DynamicTyped and Reflect for DynamicMap so it can participate in FromReflect.
+impl crate::DynamicTyped for DynamicMap {
+    fn reflect_type_info(&self) -> &'static TypeInfo {
+        // Provide opaque type info for the dynamic proxy type itself.
+        static CELL: crate::utility::NonGenericTypeInfoCell =
+            crate::utility::NonGenericTypeInfoCell::new();
+        CELL.get_or_set(|| TypeInfo::Opaque(crate::OpaqueInfo::new::<Self>()))
+    }
+}
+
+crate::impl_full_reflect!(for DynamicMap);
+
+// Allow constructing a DynamicMap from any map-like PartialReflect by cloning to dynamic.
+impl FromReflect for DynamicMap {
+    fn from_reflect(reflect: &dyn PartialReflect) -> Option<Self> {
+        let dyn_map = reflect.reflect_ref().as_map().ok()?;
+        Some(dyn_map.to_dynamic_map())
     }
 }
 
